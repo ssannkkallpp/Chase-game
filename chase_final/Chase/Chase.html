@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+    <head>
+        <link rel="stylesheet" type="text/css" href="CSS/button.css">
+        <meta charset="UTF-8">
+        <title>CHASE</title>
+    </head>
+
+    <body bgcolor="black">
+        <div align = "center">
+            <h1 style="font-family:'Segoe UI',serif;font-size:500%;text-align:center;color:green;">
+                <b><i>CHASE</i></b>
+            </h1>
+            <a onclick="play_pause();" class="button" id = "button">PAUSE</a>
+            <a href="Rules.html" class="button" target="_blank">RULES</a> <br> <br>
+            <canvas id="chase" width = 625px height = 625px style="border:3px solid gray">
+            </canvas><br>
+            <canvas id = "info" width = 625px height = 30px>
+            </canvas><br>
+            <h1 style="font-family:'Arial', serif;font-size:175%;text-align:center;color:mediumblue;"
+                id = "hscore">HIGH-SCORE: 0</h1>
+            <hr style="clear:both;"/>
+        </div>
+        <script src = "JS/extra.js"> </script>
+        <script src = "JS/game.js"> </script>
+    </body>
+</html>
