@@ -399,10 +399,25 @@ export default function GameCanvas() {
     };
   }, [isPlaying, gameLoop, handleMouseMove]);
 
-  // Initial draw
+  // Initial draw effect - this ensures the game renders immediately
   useEffect(() => {
-    drawGame();
+    const timer = setTimeout(() => {
+      drawGame();
+    }, 100);
+    
+    return () => clearTimeout(timer);
   }, [drawGame]);
+
+  // Force redraw when component mounts
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (canvas) {
+      // Ensure canvas is properly sized
+      canvas.width = CANVAS_SIZE;
+      canvas.height = CANVAS_SIZE;
+      drawGame();
+    }
+  }, []);
 
   return (
     <div className="game-container">
@@ -524,6 +539,8 @@ export default function GameCanvas() {
           background: var(--glass-bg);
           backdrop-filter: blur(10px);
           border: 2px solid var(--glass-border);
+          width: ${CANVAS_SIZE}px;
+          height: ${CANVAS_SIZE}px;
         }
         
         .game-canvas, .particle-canvas {
@@ -531,6 +548,8 @@ export default function GameCanvas() {
           position: absolute;
           top: 0;
           left: 0;
+          width: 100%;
+          height: 100%;
         }
         
         .particle-canvas {
@@ -540,6 +559,7 @@ export default function GameCanvas() {
         
         .game-canvas {
           z-index: 1;
+          cursor: crosshair;
         }
         
         .canvas-overlay {
@@ -575,6 +595,8 @@ export default function GameCanvas() {
           
           .canvas-container {
             transform: scale(0.8);
+            width: ${CANVAS_SIZE * 0.8}px;
+            height: ${CANVAS_SIZE * 0.8}px;
           }
         }
       `}</style>
