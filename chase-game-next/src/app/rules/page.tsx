@@ -1,3 +1,5 @@
+"use client";
+
 import React from 'react';
 import Link from 'next/link';
 
@@ -58,7 +60,7 @@ export default function RulesPage() {
                 <span className="mechanic-number">03</span>
                 <div className="mechanic-content">
                   <h3>Level Progression</h3>
-                  <p>Complete a level by filling the entire grid with energy nodes. Each level increases the AI hunter's speed.</p>
+                  <p>Complete a level by filling the entire grid with energy nodes. Each level increases the AI hunter&apos;s speed.</p>
                 </div>
               </div>
               
@@ -66,7 +68,7 @@ export default function RulesPage() {
                 <span className="mechanic-number">04</span>
                 <div className="mechanic-content">
                   <h3>Lives System</h3>
-                  <p>Getting caught by the red hunter costs a life. Lose all lives and you'll restart the current level.</p>
+                  <p>Getting caught by the red hunter costs a life. Lose all lives and you&apos;ll restart the current level.</p>
                 </div>
               </div>
             </div>

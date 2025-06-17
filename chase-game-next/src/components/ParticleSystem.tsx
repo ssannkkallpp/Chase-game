@@ -18,9 +18,9 @@ interface ParticleSystemProps {
   canvasRef: React.RefObject<HTMLCanvasElement>;
 }
 
-const ParticleSystem = forwardRef<any, ParticleSystemProps>(({ canvasRef }, ref) => {
+const ParticleSystem = forwardRef<unknown, ParticleSystemProps>(({ canvasRef }, ref) => {
   const particlesRef = useRef<Particle[]>([]);
-  const animationRef = useRef<number>();
+  const animationRef = useRef<number | null>(null);
 
   const createParticle = (x: number, y: number, type: 'collect' | 'explode' | 'celebrate'): Particle => {
     const colors = {

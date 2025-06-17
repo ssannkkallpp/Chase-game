@@ -27,7 +27,7 @@ export default function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particleCanvasRef = useRef<HTMLCanvasElement>(null);
   const gameLoopRef = useRef<NodeJS.Timeout | null>(null);
-  const particleSystemRef = useRef<any>(null);
+  const particleSystemRef = useRef<{ celebrate: () => void; explode: (x: number, y: number) => void; collect: (x: number, y: number) => void } | null>(null);
   
   // Game state
   const [level, setLevel] = useState(() => getStoredNumber('level', 1));
@@ -200,40 +200,6 @@ export default function GameCanvas() {
     }
   }, [drawCircle]);
 
-  // Game logic
-  const gameLoop = useCallback(() => {
-    if (!chaseActiveRef.current) return;
-
-    // Move chaser towards player
-    for (let i = 0; i < level; i++) {
-      const move = bestMove(chaserRef.current.x, chaserRef.current.y, playerRef.current.x, playerRef.current.y);
-      if (isOnTrack(chaserRef.current.x, chaserRef.current.y, move.move)) {
-        chaserRef.current.x = move.x;
-        chaserRef.current.y = move.y;
-      }
-    }
-
-    // Add green dot for chaser path
-    if (noDuplicates(circlesRef.current, [chaserRef.current.x, chaserRef.current.y])) {
-      circlesRef.current = [...circlesRef.current, [chaserRef.current.x, chaserRef.current.y]];
-      audioRef.current.blop?.play().catch(() => {});
-    }
-
-    // Check win condition
-    if (circlesRef.current.length >= MAX_CIRCLES) {
-      win();
-      return;
-    }
-
-    // Check collision
-    if (chaserRef.current.x === playerRef.current.x && chaserRef.current.y === playerRef.current.y) {
-      lose();
-      return;
-    }
-
-    drawGame();
-  }, [level, bestMove, isOnTrack, noDuplicates, drawGame]);
-
   // Win/lose handlers
   const win = useCallback(() => {
     setIsPlaying(false);
@@ -315,6 +281,40 @@ export default function GameCanvas() {
       }
     });
   }, [drawGame]);
+
+  // Game logic
+  const gameLoop = useCallback(() => {
+    if (!chaseActiveRef.current) return;
+
+    // Move chaser towards player
+    for (let i = 0; i < level; i++) {
+      const move = bestMove(chaserRef.current.x, chaserRef.current.y, playerRef.current.x, playerRef.current.y);
+      if (isOnTrack(chaserRef.current.x, chaserRef.current.y, move.move)) {
+        chaserRef.current.x = move.x;
+        chaserRef.current.y = move.y;
+      }
+    }
+
+    // Add green dot for chaser path
+    if (noDuplicates(circlesRef.current, [chaserRef.current.x, chaserRef.current.y])) {
+      circlesRef.current = [...circlesRef.current, [chaserRef.current.x, chaserRef.current.y]];
+      audioRef.current.blop?.play().catch(() => {});
+    }
+
+    // Check win condition
+    if (circlesRef.current.length >= MAX_CIRCLES) {
+      win();
+      return;
+    }
+
+    // Check collision
+    if (chaserRef.current.x === playerRef.current.x && chaserRef.current.y === playerRef.current.y) {
+      lose();
+      return;
+    }
+
+    drawGame();
+  }, [level, bestMove, isOnTrack, noDuplicates, drawGame, win, lose]);
 
   // Mouse handler
   const handleMouseMove = useCallback((evt: MouseEvent) => {
