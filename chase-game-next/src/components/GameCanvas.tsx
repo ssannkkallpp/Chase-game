@@ -426,20 +426,9 @@ export default function GameCanvas() {
           <span className="title-text">CHASE</span>
           <span className="title-subtitle">Neural Grid Protocol</span>
         </h1>
-        <GameStats 
-          score={score}
-          level={level}
-          lives={lives}
-          hscore={hscore}
-        />
       </div>
       
       <div className="game-main">
-        <GameControls 
-          isPlaying={isPlaying}
-          onPlayPause={handlePlayPause}
-        />
-        
         <div className="canvas-container">
           <canvas
             ref={particleCanvasRef}
@@ -462,10 +451,26 @@ export default function GameCanvas() {
             </div>
           </div>
         </div>
+
+        <div className="game-controls">
+          <GameControls 
+            isPlaying={isPlaying}
+            onPlayPause={handlePlayPause}
+          />
+        </div>
+
+        <div className="game-stats-container">
+          <GameStats 
+            score={score}
+            level={level}
+            lives={lives}
+            hscore={hscore}
+          />
+        </div>
       </div>
 
       <ParticleSystem 
-        canvasRef={particleCanvasRef}
+        canvasRef={particleCanvasRef as React.RefObject<HTMLCanvasElement>}
         ref={particleSystemRef}
       />
       
@@ -583,6 +588,18 @@ export default function GameCanvas() {
           transition: width 0.3s ease;
           box-shadow: 0 0 10px var(--neon-green);
         }
+
+        .game-controls {
+          width: 100%;
+          max-width: ${CANVAS_SIZE}px;
+          display: flex;
+          justify-content: center;
+        }
+
+        .game-stats-container {
+          width: 100%;
+          max-width: ${CANVAS_SIZE}px;
+        }
         
         @media (max-width: 768px) {
           .game-container {
@@ -597,6 +614,11 @@ export default function GameCanvas() {
             transform: scale(0.8);
             width: ${CANVAS_SIZE * 0.8}px;
             height: ${CANVAS_SIZE * 0.8}px;
+          }
+
+          .game-controls,
+          .game-stats-container {
+            max-width: ${CANVAS_SIZE * 0.8}px;
           }
         }
       `}</style>

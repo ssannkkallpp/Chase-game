@@ -23,11 +23,6 @@ export default function GameControls({ isPlaying, onPlayPause }: GameControlsPro
         </span>
       </button>
       
-      <Link href="/rules" className="control-button secondary">
-        <span className="button-icon">📋</span>
-        <span className="button-text">RULES</span>
-      </Link>
-      
       <button className="control-button tertiary" onClick={() => window.location.reload()}>
         <span className="button-icon">🔄</span>
         <span className="button-text">RESET</span>

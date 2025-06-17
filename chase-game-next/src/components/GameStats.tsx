@@ -49,7 +49,7 @@ export default function GameStats({ score, level, lives, hscore }: GameStatsProp
         
         .stats-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+          grid-template-columns: repeat(3, 1fr);
           gap: 1rem;
           padding: 1rem;
           background: var(--glass-bg);
@@ -124,6 +124,12 @@ export default function GameStats({ score, level, lives, hscore }: GameStatsProp
         @keyframes pulse {
           0%, 100% { transform: scale(1); }
           50% { transform: scale(1.1); }
+        }
+        
+        .stat-item.highscore {
+          grid-column: 1 / -1;
+          justify-self: center;
+          align-self: center;
         }
         
         @media (max-width: 768px) {
