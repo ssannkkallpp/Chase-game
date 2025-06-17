@@ -7,18 +7,11 @@ import GameModal from './GameModal';
 import ParticleSystem from './ParticleSystem';
 
 const CANVAS_SIZE = 625;
-const INFO_HEIGHT = 30;
 const GRID_STEP = 25;
 const INITIAL_CIRCLE: [number, number] = [25, 25];
-const MAX_CIRCLES = 576;
+const MAX_CIRCLES = 576; // 24x24 grid
 
-const audioFiles = {
-  blop: '/assets/audio/blop.mp3',
-  level_up: '/assets/audio/level_up.mp3',
-  game_over: '/assets/audio/game_over.mp3',
-  bgmusic: '/assets/audio/background_music.mp3',
-};
-
+// Storage helpers
 function getStoredNumber(key: string, fallback: number) {
   if (typeof window === 'undefined') return fallback;
   const val = localStorage.getItem(key);
@@ -33,30 +26,50 @@ function setStoredNumber(key: string, value: number) {
 export default function GameCanvas() {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const particleCanvasRef = useRef<HTMLCanvasElement>(null);
+  const gameLoopRef = useRef<NodeJS.Timeout | null>(null);
+  const particleSystemRef = useRef<any>(null);
   
-  // UI state
+  // Game state
   const [level, setLevel] = useState(() => getStoredNumber('level', 1));
   const [lives, setLives] = useState(() => getStoredNumber('lives', Math.round(1 * 1.5)));
   const [score, setScore] = useState(() => getStoredNumber('score', 0));
   const [hscore, setHScore] = useState(() => getStoredNumber('hscore', 0));
-  const [play, setPlay] = useState(false);
+  const [isPlaying, setIsPlaying] = useState(false);
   const [showModal, setShowModal] = useState<{ open: boolean; message: string; type: 'win' | 'lose' | 'info' }>({ 
     open: false, 
     message: '', 
     type: 'info' 
   });
   
-  // Mutable game state refs
+  // Game objects - using refs to maintain state across renders
   const circlesRef = useRef<[number, number][]>([INITIAL_CIRCLE]);
-  const cxRef = useRef(25);
-  const cyRef = useRef(25);
-  const dxRef = useRef(-25);
-  const dyRef = useRef(-25);
-  const chaseRef = useRef(false);
-  const duration = 100;
-  const playGameRef = useRef<NodeJS.Timeout | null>(null);
+  const chaserRef = useRef({ x: 25, y: 25 });
+  const playerRef = useRef({ x: -25, y: -25 });
+  const chaseActiveRef = useRef(false);
   const audioRef = useRef<{ [key: string]: HTMLAudioElement }>({});
-  const particleSystemRef = useRef<any>(null);
+
+  // Initialize audio
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      audioRef.current = {
+        blop: new Audio('/assets/audio/blop.mp3'),
+        level_up: new Audio('/assets/audio/level_up.mp3'),
+        game_over: new Audio('/assets/audio/game_over.mp3'),
+        bgmusic: new Audio('/assets/audio/background_music.mp3'),
+      };
+      
+      // Set audio properties
+      Object.values(audioRef.current).forEach(audio => {
+        audio.volume = 0.3;
+        audio.preload = 'auto';
+      });
+      
+      if (audioRef.current.bgmusic) {
+        audioRef.current.bgmusic.loop = true;
+        audioRef.current.bgmusic.volume = 0.1;
+      }
+    }
+  }, []);
 
   // Utility functions
   const noDuplicates = useCallback((array: [number, number][], elem: [number, number]) => {
@@ -64,61 +77,61 @@ export default function GameCanvas() {
   }, []);
 
   const isOnTrack = useCallback((x: number, y: number, dir: string) => {
+    let newX = x, newY = y;
     switch (dir) {
-      case 'l': x -= GRID_STEP; break;
-      case 'r': x += GRID_STEP; break;
-      case 'u': y -= GRID_STEP; break;
-      case 'd': y += GRID_STEP; break;
+      case 'l': newX -= GRID_STEP; break;
+      case 'r': newX += GRID_STEP; break;
+      case 'u': newY -= GRID_STEP; break;
+      case 'd': newY += GRID_STEP; break;
     }
-    return (
-      x >= GRID_STEP && x <= CANVAS_SIZE - GRID_STEP &&
-      y >= GRID_STEP && y <= CANVAS_SIZE - GRID_STEP
-    );
+    return newX >= GRID_STEP && newX <= CANVAS_SIZE - GRID_STEP && 
+           newY >= GRID_STEP && newY <= CANVAS_SIZE - GRID_STEP;
   }, []);
 
-  const bestMove = useCallback((x: number, y: number, a: number, b: number) => {
-    const dx = x - a;
-    const dy = y - b;
+  const bestMove = useCallback((chaserX: number, chaserY: number, playerX: number, playerY: number) => {
+    const dx = chaserX - playerX;
+    const dy = chaserY - playerY;
     let move = '';
+
     if ((Math.abs(dx) > Math.abs(dy) && dy !== 0) || dx === 0) {
       move = dy > 0 ? 'u' : 'd';
     }
     if ((Math.abs(dy) > Math.abs(dx) && dx !== 0) || dy === 0) {
       move = dx > 0 ? 'l' : 'r';
     }
-    if (dx === dy) {
+    if (Math.abs(dx) === Math.abs(dy)) {
       if (dx === 0 && dy === 0) {
-        return [25, 25, 'u'];
+        return { x: 25, y: 25, move: 'u' };
       } else if (dx > 0) move = 'l';
       else if (dy > 0) move = 'u';
       else if (dx < 0) move = 'r';
       else if (dy < 0) move = 'd';
     }
+
+    let newX = chaserX, newY = chaserY;
     switch (move) {
-      case 'u': y -= GRID_STEP; break;
-      case 'd': y += GRID_STEP; break;
-      case 'l': x -= GRID_STEP; break;
-      case 'r': x += GRID_STEP; break;
+      case 'u': newY -= GRID_STEP; break;
+      case 'd': newY += GRID_STEP; break;
+      case 'l': newX -= GRID_STEP; break;
+      case 'r': newX += GRID_STEP; break;
     }
-    return [x, y, move];
+    return { x: newX, y: newY, move };
   }, []);
 
-  // Enhanced draw helpers with neon effects
+  // Drawing functions
   const drawCircle = useCallback((ctx: CanvasRenderingContext2D, x: number, y: number, color: string, glowing = false) => {
     ctx.save();
     
     if (glowing) {
-      // Create glow effect
       ctx.shadowColor = color;
       ctx.shadowBlur = 20;
-      ctx.globalCompositeOperation = 'screen';
     }
     
-    // Outer glow ring
+    // Outer glow
     if (glowing) {
       ctx.beginPath();
       ctx.arc(x, y, 15, 0, 2 * Math.PI);
-      ctx.fillStyle = color + '40'; // Semi-transparent
+      ctx.fillStyle = color + '40';
       ctx.fill();
     }
     
@@ -126,7 +139,6 @@ export default function GameCanvas() {
     ctx.beginPath();
     ctx.arc(x, y, 10, 0, 2 * Math.PI);
     
-    // Create gradient for depth
     const gradient = ctx.createRadialGradient(x - 3, y - 3, 0, x, y, 10);
     gradient.addColorStop(0, color);
     gradient.addColorStop(1, color + '80');
@@ -134,7 +146,6 @@ export default function GameCanvas() {
     ctx.fillStyle = gradient;
     ctx.fill();
     
-    // Border
     ctx.strokeStyle = '#ffffff40';
     ctx.lineWidth = 1;
     ctx.stroke();
@@ -142,7 +153,6 @@ export default function GameCanvas() {
     ctx.restore();
   }, []);
 
-  // Enhanced game drawing with modern effects
   const drawGame = useCallback(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -152,7 +162,7 @@ export default function GameCanvas() {
     // Clear canvas
     ctx.clearRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
     
-    // Draw background with gradient
+    // Background gradient
     const bgGradient = ctx.createLinearGradient(0, 0, CANVAS_SIZE, CANVAS_SIZE);
     bgGradient.addColorStop(0, '#0a0a0f');
     bgGradient.addColorStop(0.5, '#1a1a2e');
@@ -160,7 +170,7 @@ export default function GameCanvas() {
     ctx.fillStyle = bgGradient;
     ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
     
-    // Draw enhanced grid with neon effect
+    // Grid
     ctx.strokeStyle = '#00d4ff40';
     ctx.lineWidth = 1;
     ctx.shadowColor = '#00d4ff';
@@ -176,215 +186,223 @@ export default function GameCanvas() {
     ctx.stroke();
     ctx.shadowBlur = 0;
     
-    // Draw all green dots with glow
+    // Draw all green dots
     for (const [x, y] of circlesRef.current) {
       drawCircle(ctx, x, y, '#39ff14', true);
     }
     
-    // Draw red dot (chaser) with intense glow
-    drawCircle(ctx, cxRef.current, cyRef.current, '#ff073a', true);
+    // Draw chaser (red)
+    drawCircle(ctx, chaserRef.current.x, chaserRef.current.y, '#ff073a', true);
     
-    // Draw blue dot (player) with glow
-    if (dxRef.current >= 0 && dyRef.current >= 0) {
-      drawCircle(ctx, dxRef.current, dyRef.current, '#00d4ff', true);
+    // Draw player (blue) if active
+    if (playerRef.current.x >= 0 && playerRef.current.y >= 0) {
+      drawCircle(ctx, playerRef.current.x, playerRef.current.y, '#00d4ff', true);
     }
   }, [drawCircle]);
 
-  // Win/lose logic with particle effects
+  // Game logic
+  const gameLoop = useCallback(() => {
+    if (!chaseActiveRef.current) return;
+
+    // Move chaser towards player
+    for (let i = 0; i < level; i++) {
+      const move = bestMove(chaserRef.current.x, chaserRef.current.y, playerRef.current.x, playerRef.current.y);
+      if (isOnTrack(chaserRef.current.x, chaserRef.current.y, move.move)) {
+        chaserRef.current.x = move.x;
+        chaserRef.current.y = move.y;
+      }
+    }
+
+    // Add green dot for chaser path
+    if (noDuplicates(circlesRef.current, [chaserRef.current.x, chaserRef.current.y])) {
+      circlesRef.current = [...circlesRef.current, [chaserRef.current.x, chaserRef.current.y]];
+      audioRef.current.blop?.play().catch(() => {});
+    }
+
+    // Check win condition
+    if (circlesRef.current.length >= MAX_CIRCLES) {
+      win();
+      return;
+    }
+
+    // Check collision
+    if (chaserRef.current.x === playerRef.current.x && chaserRef.current.y === playerRef.current.y) {
+      lose();
+      return;
+    }
+
+    drawGame();
+  }, [level, bestMove, isOnTrack, noDuplicates, drawGame]);
+
+  // Win/lose handlers
   const win = useCallback(() => {
-    setShowModal({ open: true, message: `Level ${level} Complete!`, type: 'win' });
-    audioRef.current.level_up?.play();
+    setIsPlaying(false);
+    audioRef.current.bgmusic?.pause();
+    audioRef.current.level_up?.play().catch(() => {});
     
-    // Trigger celebration particles
     if (particleSystemRef.current) {
       particleSystemRef.current.celebrate();
     }
     
-    const nextLevel = level + 1;
-    setLevel(nextLevel);
-    setStoredNumber('level', nextLevel);
-    setLives(Math.round(nextLevel * 1.5));
-    setStoredNumber('lives', Math.round(nextLevel * 1.5));
+    setShowModal({ open: true, message: `Level ${level} Complete!`, type: 'win' });
     
     setTimeout(() => {
+      const nextLevel = level + 1;
+      setLevel(nextLevel);
+      setLives(Math.round(nextLevel * 1.5));
+      setStoredNumber('level', nextLevel);
+      setStoredNumber('lives', Math.round(nextLevel * 1.5));
+      
+      // Reset game state
       circlesRef.current = [INITIAL_CIRCLE];
-      cxRef.current = 25;
-      cyRef.current = 25;
-      dxRef.current = -25;
-      dyRef.current = -25;
-      chaseRef.current = false;
-      setPlay(false);
+      chaserRef.current = { x: 25, y: 25 };
+      playerRef.current = { x: -25, y: -25 };
+      chaseActiveRef.current = false;
+      
       drawGame();
-    }, 2000);
+      setShowModal({ open: false, message: '', type: 'info' });
+    }, 3000);
   }, [level, drawGame]);
 
   const lose = useCallback(() => {
-    setShowModal({ open: true, message: 'Caught by the chaser!', type: 'lose' });
-    audioRef.current.game_over?.play();
+    setIsPlaying(false);
+    audioRef.current.bgmusic?.pause();
+    audioRef.current.game_over?.play().catch(() => {});
     
-    // Trigger explosion particles
     if (particleSystemRef.current) {
-      particleSystemRef.current.explode(cxRef.current, cyRef.current);
+      particleSystemRef.current.explode(chaserRef.current.x, chaserRef.current.y);
     }
     
     setLives(prev => {
-      let next = prev - 1;
-      if (next <= 0) {
+      const newLives = prev - 1;
+      if (newLives <= 0) {
         setShowModal({ open: true, message: 'Game Over - Starting Fresh!', type: 'lose' });
-        setLevel(1);
-        setScore(0);
-        setStoredNumber('level', 1);
-        setStoredNumber('score', 0);
         setTimeout(() => {
-          circlesRef.current = [INITIAL_CIRCLE];
-          cxRef.current = 25;
-          cyRef.current = 25;
-          dxRef.current = -25;
-          dyRef.current = -25;
-          chaseRef.current = false;
+          setLevel(1);
+          setScore(0);
           setLives(Math.round(1 * 1.5));
+          setStoredNumber('level', 1);
+          setStoredNumber('score', 0);
           setStoredNumber('lives', Math.round(1 * 1.5));
-          setPlay(false);
+          
+          circlesRef.current = [INITIAL_CIRCLE];
+          chaserRef.current = { x: 25, y: 25 };
+          playerRef.current = { x: -25, y: -25 };
+          chaseActiveRef.current = false;
+          
           drawGame();
-        }, 2000);
+          setShowModal({ open: false, message: '', type: 'info' });
+        }, 3000);
         return Math.round(1 * 1.5);
       } else {
+        setShowModal({ open: true, message: 'Caught! Try again!', type: 'lose' });
         setScore(prevScore => {
           const newScore = Math.max(0, prevScore - 50);
           setStoredNumber('score', newScore);
           return newScore;
         });
+        
         setTimeout(() => {
-          cxRef.current = 25;
-          cyRef.current = 25;
-          dxRef.current = -25;
-          dyRef.current = -25;
-          chaseRef.current = false;
-          setPlay(false);
+          chaserRef.current = { x: 25, y: 25 };
+          playerRef.current = { x: -25, y: -25 };
+          chaseActiveRef.current = false;
           drawGame();
-        }, 1500);
-        setStoredNumber('lives', next);
-        return next;
+          setShowModal({ open: false, message: '', type: 'info' });
+        }, 2000);
+        
+        setStoredNumber('lives', newLives);
+        return newLives;
       }
     });
   }, [drawGame]);
 
-  // Main game loop
-  const game = useCallback(() => {
-    // Move chaser
-    let [newCx, newCy] = [cxRef.current, cyRef.current];
-    if (chaseRef.current) {
-      for (let i = 0; i < level; i++) {
-        const [nextX, nextY, dir] = bestMove(newCx, newCy, dxRef.current, dyRef.current);
-        if (isOnTrack(newCx, newCy, dir)) {
-          newCx = nextX;
-          newCy = nextY;
-        }
-      }
-    }
-    cxRef.current = newCx;
-    cyRef.current = newCy;
-    
-    // Add green dot for chaser
-    if (noDuplicates(circlesRef.current, [newCx, newCy])) {
-      circlesRef.current = [...circlesRef.current, [newCx, newCy]];
-      audioRef.current.blop?.play();
-    }
-    
-    // Win condition
-    if (circlesRef.current.length >= MAX_CIRCLES) {
-      audioRef.current.bgmusic?.pause();
-      win();
-      return;
-    }
-    
-    // Lose condition
-    if (newCx === dxRef.current && newCy === dyRef.current && chaseRef.current) {
-      lose();
-      return;
-    }
-    
-    drawGame();
-  }, [level, bestMove, isOnTrack, noDuplicates, drawGame, win, lose]);
-
-  // Enhanced mouse move handler
+  // Mouse handler
   const handleMouseMove = useCallback((evt: MouseEvent) => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !isPlaying) return;
+    
     const rect = canvas.getBoundingClientRect();
     let mx = evt.clientX - rect.left;
     let my = evt.clientY - rect.top;
     
-    if (mx >= GRID_STEP && mx <= CANVAS_SIZE - GRID_STEP && my >= GRID_STEP && my <= CANVAS_SIZE - GRID_STEP) {
-      if (!chaseRef.current) chaseRef.current = true;
+    if (mx >= GRID_STEP && mx <= CANVAS_SIZE - GRID_STEP && 
+        my >= GRID_STEP && my <= CANVAS_SIZE - GRID_STEP) {
       
-      // Snap to nearest grid
+      if (!chaseActiveRef.current) {
+        chaseActiveRef.current = true;
+      }
+      
+      // Snap to grid
       mx = Math.round(mx / GRID_STEP) * GRID_STEP;
       my = Math.round(my / GRID_STEP) * GRID_STEP;
       
-      // Add green dot for player
-      if (noDuplicates(circlesRef.current, [mx, my])) {
-        circlesRef.current = [...circlesRef.current, [mx, my]];
-        audioRef.current.blop?.play();
+      // Only move if position changed
+      if (mx !== playerRef.current.x || my !== playerRef.current.y) {
+        playerRef.current.x = mx;
+        playerRef.current.y = my;
         
-        // Trigger collection particles
-        if (particleSystemRef.current) {
-          particleSystemRef.current.collect(mx, my);
+        // Add green dot for player
+        if (noDuplicates(circlesRef.current, [mx, my])) {
+          circlesRef.current = [...circlesRef.current, [mx, my]];
+          audioRef.current.blop?.play().catch(() => {});
+          
+          if (particleSystemRef.current) {
+            particleSystemRef.current.collect(mx, my);
+          }
+          
+          const newScore = score + Math.round(lives / 2);
+          setScore(newScore);
+          setStoredNumber('score', newScore);
+          
+          if (hscore < newScore) {
+            setHScore(newScore);
+            setStoredNumber('hscore', newScore);
+          }
         }
         
-        const newScore = score + Math.round(lives / 2);
-        setScore(newScore);
-        setStoredNumber('score', newScore);
-        if (hscore < newScore) {
-          setHScore(newScore);
-          setStoredNumber('hscore', newScore);
-        }
+        drawGame();
       }
-      dxRef.current = mx;
-      dyRef.current = my;
-      drawGame();
     }
-  }, [score, lives, hscore, noDuplicates, drawGame]);
+  }, [isPlaying, score, lives, hscore, noDuplicates, drawGame]);
 
-  // Play/pause logic
-  const playPause = useCallback(() => {
-    setPlay(prev => !prev);
+  // Play/pause handler
+  const handlePlayPause = useCallback(() => {
+    setIsPlaying(prev => {
+      const newPlaying = !prev;
+      if (newPlaying) {
+        audioRef.current.bgmusic?.play().catch(() => {});
+      } else {
+        audioRef.current.bgmusic?.pause();
+      }
+      return newPlaying;
+    });
   }, []);
 
   // Game loop effect
   useEffect(() => {
-    if (play) {
-      playGameRef.current = setInterval(game, duration);
+    if (isPlaying) {
+      gameLoopRef.current = setInterval(gameLoop, 100);
       window.addEventListener('mousemove', handleMouseMove);
     } else {
-      if (playGameRef.current) clearInterval(playGameRef.current);
+      if (gameLoopRef.current) {
+        clearInterval(gameLoopRef.current);
+        gameLoopRef.current = null;
+      }
       window.removeEventListener('mousemove', handleMouseMove);
     }
+    
     return () => {
-      if (playGameRef.current) clearInterval(playGameRef.current);
+      if (gameLoopRef.current) {
+        clearInterval(gameLoopRef.current);
+      }
       window.removeEventListener('mousemove', handleMouseMove);
     };
-  }, [play, game, handleMouseMove]);
-
-  // Redraw on state change
-  useEffect(() => {
-    drawGame();
-  }, [score, level, lives, hscore, drawGame]);
-
-  // Initialize audio
-  useEffect(() => {
-    audioRef.current = {
-      blop: new Audio(audioFiles.blop),
-      level_up: new Audio(audioFiles.level_up),
-      game_over: new Audio(audioFiles.game_over),
-      bgmusic: new Audio(audioFiles.bgmusic),
-    };
-  }, []);
+  }, [isPlaying, gameLoop, handleMouseMove]);
 
   // Initial draw
   useEffect(() => {
     drawGame();
-  }, []);
+  }, [drawGame]);
 
   return (
     <div className="game-container">
@@ -403,8 +421,8 @@ export default function GameCanvas() {
       
       <div className="game-main">
         <GameControls 
-          isPlaying={play}
-          onPlayPause={playPause}
+          isPlaying={isPlaying}
+          onPlayPause={handlePlayPause}
         />
         
         <div className="canvas-container">
